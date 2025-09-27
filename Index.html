@@ -98,9 +98,24 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
-    // Configuration des fichiers - adaptez les chemins selon votre structure
-    const GEOJSON_FILE = './sources/nacom.geojson';
-    const CSV_FILE = './sources/datanova.csv';
+    // Fonction pour gérer les chemins selon qu'on est en local ou sur GitHub Pages
+    function getBasePath() {
+        const hostname = window.location.hostname;
+        if (hostname.includes('github.io')) {
+            // Exemple d’URL GitHub Pages : https://username.github.io/mon-projet/
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            // pathParts[0] = "mon-projet" dans cet exemple
+            return pathParts.length > 0 ? `/${pathParts[0]}` : '';
+        }
+        return '.'; // En local
+    }
+
+    const basePath = getBasePath();
+
+    // Configuration des fichiers
+    const GEOJSON_FILE = `${basePath}/sources/nacom.geojson`;
+    const CSV_FILE = `${basePath}/sources/datanova.csv`;
+
 
     // Setup map
     const map = L.map('map', {zoomControl:true}).setView([46.5, 2.5], 6);
