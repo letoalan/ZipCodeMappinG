@@ -99,8 +99,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
     // Configuration des fichiers - adaptez les chemins selon votre structure
-    const GEOJSON_FILE = './nacom.geojson';
-    const CSV_FILE = './datanova.csv';
+    const GEOJSON_FILE = './sources/nacom.geojson';
+    const CSV_FILE = './sources/datanova.csv';
 
     // Setup map
     const map = L.map('map', {zoomControl:true}).setView([46.5, 2.5], 6);
@@ -144,7 +144,7 @@
     const selectionInfo = document.getElementById('selectionInfo');
     const coordsInfo = document.getElementById('coordsInfo');
     const coordsModeRadios = document.querySelectorAll('input[name="coordsMode"]');
-    
+
 
     let lastMatches = [];
     let groupFeatures = [];
