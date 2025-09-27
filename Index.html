@@ -92,13 +92,15 @@
     </aside>
 </main>
 <footer>
-    Placez <code>nacom.geojson</code> et <code>datanova.csv</code> dans le même dossier et servez via un serveur local (<code>python -m http.server</code>).
+    Placez <code>nacom.geojson</code> et <code>datanova.csv</code> dans le même répertoire que ce fichier HTML.
+    <br>Pour GitHub Pages : activez GitHub Pages dans les paramètres du repository.
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
-    const GEOJSON_FILE = 'nacom.geojson';
-    const CSV_FILE = 'datanova.csv';
+    // Configuration des fichiers - adaptez les chemins selon votre structure
+    const GEOJSON_FILE = './nacom.geojson';
+    const CSV_FILE = './datanova.csv';
 
     // Setup map
     const map = L.map('map', {zoomControl:true}).setView([46.5, 2.5], 6);
@@ -133,15 +135,16 @@
     const addAllBtn = document.getElementById('addAllBtn');
     const selectAllBtn = document.getElementById('selectAllBtn');
     const selectNoneBtn = document.getElementById('selectNoneBtn');
-    const selectionInfo = document.getElementById('selectionInfo');
-    const coordsInfo = document.getElementById('coordsInfo');
-    const coordsModeRadios = document.querySelectorAll('input[name="coordsMode"]');
     const clearGroupBtn = document.getElementById('clearGroupBtn');
     const coordsOutput = document.getElementById('coordsOutput');
     const statusDiv = document.getElementById('status');
     const statsDiv = document.getElementById('stats');
     const directMode = document.getElementById('directMode');
     const searchModeRadios = document.querySelectorAll('input[name="searchMode"]');
+    const selectionInfo = document.getElementById('selectionInfo');
+    const coordsInfo = document.getElementById('coordsInfo');
+    const coordsModeRadios = document.querySelectorAll('input[name="coordsMode"]');
+    
 
     let lastMatches = [];
     let groupFeatures = [];
@@ -195,18 +198,22 @@
             selectedResults.addTo(selectedLayer);
         }
     }
-    const count = selectedFeatures.length;
-    const total = lastMatches.length;
-    selectionInfo.textContent = `${count}/${total} commune(s) sélectionnée(s)`;
 
-    // Update button states
-    addSelectedBtn.disabled = count === 0;
-    selectAllBtn.disabled = total === 0 || count === total;
-    selectNoneBtn.disabled = count === 0;
+    function updateSelectionInfo() {
+        const count = selectedFeatures.length;
+        const total = lastMatches.length;
+        selectionInfo.textContent = `${count}/${total} commune(s) sélectionnée(s)`;
 
-    updateCoordsOutput();
+        // Update button states
+        addSelectedBtn.disabled = count === 0;
+        selectAllBtn.disabled = total === 0 || count === total;
+        selectNoneBtn.disabled = count === 0;
 
+        // Update map highlighting
+        updateMapHighlight();
 
+        updateCoordsOutput();
+    }
 
     function updateCoordsOutput() {
         let features = [];
@@ -231,58 +238,75 @@
             currentSearchMode = e.target.value;
             directMode.style.display = currentSearchMode === 'direct' ? 'block' : 'none';
             clearResults();
-            // Event listeners for coords mode
-            coordsModeRadios.forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    currentCoordsMode = e.target.value;
-                    updateCoordsOutput();
-                });
-            });
         });
-
-        function showStatus(message, type = 'loading') {
-            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
-            if (type === 'success' || type === 'error') {
-                setTimeout(() => statusDiv.innerHTML = '', 3000);
-            }
-        }
-
-        function updateSelectionInfo() {
-            const count = selectedFeatures.length;
-            const total = lastMatches.length;
-            selectionInfo.textContent = `${count}/${total} commune(s) sélectionnée(s)`;
-
-            // Update button states
-            addSelectedBtn.disabled = count === 0;
-            selectAllBtn.disabled = total === 0 || count === total;
-            selectNoneBtn.disabled = count === 0;
-
-            // Update map highlighting
-            updateMapHighlight();
-
-            updateCoordsOutput();
-        }
-
-        function updateCoordsOutput() {
-            let features = [];
-            if (currentCoordsMode === 'selected') {
-                features = selectedFeatures;
-            } else {
-                features = groupFeatures;
-            }
-
-            if (features.length === 0) {
-                coordsOutput.value = '';
-                return;
-            }
-
-            const fc = {type: 'FeatureCollection', features: features};
-            coordsOutput.value = JSON.stringify(fc, null, 2);
-        }
-        const geoCount = allFeatures.length;
-        const csvCount = datanovaData.size;
-        statsDiv.innerHTML = `Données chargées: ${geoCount} communes (GeoJSON), ${csvCount} codes postaux (CSV)`;
     });
+
+    // Event listeners for coords mode
+    coordsModeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            currentCoordsMode = e.target.value;
+            updateCoordsOutput();
+        });
+    });
+
+    showStatus('Chargement des données...');
+
+    // Load data files with better error handling
+    showStatus('Chargement des données...');
+
+    Promise.all([
+        fetch(GEOJSON_FILE)
+            .then(r => {
+                if (!r.ok) throw new Error(`Erreur ${r.status}: Impossible de charger ${GEOJSON_FILE}`);
+                return r.json();
+            }),
+        fetch(CSV_FILE)
+            .then(r => {
+                if (!r.ok) throw new Error(`Erreur ${r.status}: Impossible de charger ${CSV_FILE}`);
+                return r.text();
+            })
+    ]).then(([geojson, csvText]) => {
+        // Load GeoJSON
+        const features = (geojson.type === 'FeatureCollection') ? geojson.features : (Array.isArray(geojson) ? geojson : []);
+        allFeatures = features;
+        geojsonLayer = L.geoJSON(geojson, {
+            style: {weight: 1, color: '#888', fill: false}
+        }).addTo(map);
+
+        // Load CSV data
+        datanovaData = parseCSV(csvText);
+
+        // Setup property selector for direct mode
+        if (allFeatures.length > 0) {
+            const keys = Object.keys(allFeatures[0].properties || {});
+            propSelect.innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join('');
+            updatePropSample();
+        }
+
+        map.fitBounds(geojsonLayer.getBounds());
+        showStatus('Données chargées avec succès', 'success');
+        updateStats();
+
+    }).catch(error => {
+        console.error('Erreur lors du chargement:', error);
+        showStatus(`Erreur: ${error.message}`, 'error');
+        statusDiv.innerHTML += `
+        <div class="status error" style="margin-top:8px;">
+          <strong>Vérifiez que les fichiers suivants sont présents :</strong><br>
+          • <code>${GEOJSON_FILE}</code><br>
+          • <code>${CSV_FILE}</code><br>
+          <small>Les fichiers doivent être dans le même répertoire que ce fichier HTML.</small>
+        </div>
+      `;
+    });
+
+    propSelect.addEventListener('change', updatePropSample);
+
+    function updatePropSample() {
+        const prop = propSelect.value;
+        const samples = allFeatures.map(f => f.properties[prop]).filter(Boolean).slice(0, 6);
+        propSample.textContent = samples.length ? 'Exemples: ' + samples.join(', ') : 'Aucun exemple.';
+    }
 
     // Parse CSV data
     function parseCSV(csvText) {
@@ -328,47 +352,6 @@
         }
         result.push(current.trim());
         return result;
-    }
-
-    showStatus('Chargement des données...');
-
-    // Load data files
-    Promise.all([
-        fetch(GEOJSON_FILE).then(r => r.json()),
-        fetch(CSV_FILE).then(r => r.text())
-    ]).then(([geojson, csvText]) => {
-        // Load GeoJSON
-        const features = (geojson.type === 'FeatureCollection') ? geojson.features : (Array.isArray(geojson) ? geojson : []);
-        allFeatures = features;
-        geojsonLayer = L.geoJSON(geojson, {
-            style: {weight: 1, color: '#888', fill: false}
-        }).addTo(map);
-
-        // Load CSV data
-        datanovaData = parseCSV(csvText);
-
-        // Setup property selector for direct mode
-        if (allFeatures.length > 0) {
-            const keys = Object.keys(allFeatures[0].properties || {});
-            propSelect.innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join('');
-            updatePropSample();
-        }
-
-        map.fitBounds(geojsonLayer.getBounds());
-        showStatus('Données chargées avec succès', 'success');
-        updateStats();
-
-    }).catch(error => {
-        console.error('Erreur lors du chargement:', error);
-        showStatus('Erreur lors du chargement des données', 'error');
-    });
-
-    propSelect.addEventListener('change', updatePropSample);
-
-    function updatePropSample() {
-        const prop = propSelect.value;
-        const samples = allFeatures.map(f => f.properties[prop]).filter(Boolean).slice(0, 6);
-        propSample.textContent = samples.length ? 'Exemples: ' + samples.join(', ') : 'Aucun exemple.';
     }
 
     function parseInput(input) {
